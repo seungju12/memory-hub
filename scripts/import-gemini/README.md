@@ -12,6 +12,9 @@
    ```bash
    python3 -I scripts/import-gemini/filter.py data/work/conversations.jsonl data/work/self-prompts.md
    ```
+   본인 이름·회사명·가까운 사람 이름처럼 **개인 키워드**는 `data/filter-keywords.txt`에 한 줄에 하나씩 적습니다
+   (`#` 주석 가능, 다른 경로는 `--keywords FILE`). `data/`는 gitignore라 public repo에 올라가지 않으며,
+   gitignore되지 않은 파일을 지정하면 경고합니다. 개인 키워드는 조사가 붙어도 걸리도록 부분 문자열로 찾습니다.
 4. Claude Code가 `self-prompts.md` + Gemini "저장된 정보"를 읽고 후보 기억을 `data/review.md`로 작성
    (민감 정보·제3자 정보는 기본 체크 해제)
 5. 사람이 `data/review.md`에서 체크·수정
