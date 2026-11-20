@@ -2,7 +2,9 @@ import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { createMcpHandler } from "agents/mcp/server";
 import { tokenMatches } from "./auth/bearer";
 import { type AuthProps, handleAuthRoute } from "./auth/github";
+import { backfillEmbeddings } from "./core/memory";
 import { SERVER_INFO, buildServer } from "./mcp/server";
+import { cloudflareSemanticIndex } from "./search/semantic";
 
 const MCP_ROUTE = "/mcp";
 
@@ -11,7 +13,7 @@ const mcpApi = {
 	fetch(request: Request, env: Env, ctx: ExecutionContext) {
 		const props = (ctx as ExecutionContext & { props?: Partial<AuthProps> }).props;
 		// Stateless: a fresh server per request, so no Durable Object is needed.
-		const handler = createMcpHandler(() => buildServer(env.DB, props?.source), { route: MCP_ROUTE });
+		const handler = createMcpHandler(() => buildServer(env.DB, props?.source, cloudflareSemanticIndex(env)), { route: MCP_ROUTE });
 		return handler(request, env, ctx);
 	},
 };
@@ -70,5 +72,13 @@ export default {
 			providers.set(baseUrl, provider);
 		}
 		return provider.fetch(request, env, ctx);
+	},
+
+	/** Cron: give a vector to memories that have none yet (pre-P2 rows, failed indexing). */
+	async scheduled(_controller, env) {
+		const sem = cloudflareSemanticIndex(env);
+		if (!sem) return;
+		const n = await backfillEmbeddings(env.DB, sem);
+		if (n) console.log(`[backfill] embedded ${n} memories`);
 	},
 } satisfies ExportedHandler<Env>;

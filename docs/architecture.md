@@ -229,7 +229,7 @@ CREATE TABLE sync_state (
 - `load_me` 프롬프트 — "내 컨텍스트를 불러와서 이 대화에 반영해"
 
 ### 중복/충돌 처리
-- `remember` 시 벡터 유사도 ≥ 0.9 인 기존 기억이 있으면 저장하지 않고 후보를 반환 → 모델이 `update_memory`로 병합할지 결정
+- `remember` 시 벡터 유사도 ≥ 0.7 인 기존 기억이 있으면 (초안은 0.9였으나 실측 결과 bge-m3에서 같은 뜻의 문장이 약 0.75 → P2에서 조정) 저장하지 않고 후보를 반환 → 모델이 `update_memory`로 병합할지 결정
 - Bridge Sync의 Inbox 처리, 초기 데이터 import도 **같은 저장 로직(서비스 계층)** 을 거침
 
 ---
@@ -379,7 +379,7 @@ memory-hub/                     # GitHub public
 |---|---|---|
 | **P0** 뼈대 ✅ (배포 완료, Bearer로 Claude Code 연결 중) | Stateless MCP 핸들러, 8개 도구, trigram FTS 검색, Bearer 토큰, CI + gitleaks | 로컬에서 저장·조회 검증, 테스트 20개 통과 |
 | **P1** 인증 ✅ (배포 완료, 2026-11-20 claude.ai 커넥터 연결 확인) | OAuth 2.1 + GitHub 로그인 | claude.ai 커스텀 커넥터 연결 성공 |
-| **P2** 검색 고도화 | Vectorize + 임베딩 + 하이브리드 검색, 중복 감지 | 한국어 의미 검색 동작 |
+| **P2** 검색 고도화 ✅ (2026-11-20 배포) | Vectorize + 임베딩 + 하이브리드 검색, 중복 감지 | 한국어 의미 검색 동작 |
 | **P2.5** 초기 데이터 | Gemini Takeout → Claude Code 추출 → 검토 → import | 검토된 기억 일괄 저장 완료 |
 | **P3** MCP 클라이언트 | **개인 도메인 전환**, Antigravity 연결, 공통 규칙 배포 | MCP 클라이언트 3곳에서 같은 기억 조회 |
 | **P3.5** Bridge | 공용 renderer → Google Docs(Gemini)·Notion(Pickle) sink, Notion Inbox 수집, Gemini 쓰기 경로 검증 (3.4절) | Gemini·Pickle이 About Me를 읽고, Inbox 기록이 D1에 반영됨 |
@@ -403,6 +403,15 @@ memory-hub/                     # GitHub public
 - **CIMD 지원**: 최신 MCP 인증 스펙의 Client ID Metadata Document도 허용 (`global_fetch_strictly_public` 호환성 플래그 필요)
 - **토큰 수명**: access 1시간, refresh 30일(사용 시 연장)
 - **`PUBLIC_BASE_URL`**: OAuth 메타데이터의 resource/issuer와 GitHub callback에 사용 → P3 도메인 전환 시 vars + GitHub OAuth App callback만 변경
+
+### P2 구현 메모 (설계 대비 변경점)
+- **`SemanticIndex` 인터페이스로 분리** (`src/search/semantic.ts`): 실제 구현은 Workers AI `@cf/baai/bge-m3`(1024차원) + Vectorize(cosine, `category` 메타데이터 인덱스). core는 인터페이스만 알아서 테스트는 메모리 내 가짜 구현으로 의미 검색 동작까지 검증
+- **장애 시 키워드로 대체**: 임베딩·Vectorize 호출이 실패해도 저장·검색은 계속됨. 실패한 기억은 `embedded_at = NULL`로 남고 **30분 cron 백필**이 다시 처리 (P2 이전 기억도 같은 경로로 색인)
+- **하이브리드 검색**: 키워드(trigram) 결과와 벡터 결과를 각각 `limit×2`개 뽑아 RRF(k=60)로 병합. 유사도 0.5 미만 벡터 결과는 잡음으로 버림. 결과에 `match: ["keyword","semantic"]`, `similarity` 표시
+- **의미 중복**: 완전 일치 검사 → 벡터 유사도 ≥ 0.7 후보가 있으면 저장하지 않고 `status: "similar"` + 후보 반환. **카테고리를 가리지 않고** 검사(같은 사실이 다른 카테고리로 저장되는 경우 방지). 다른 사실이면 `allow_similar: true`로 다시 저장
+- **기준값 실측** (bge-m3, 한국어): 같은 사실의 다른 표현 ≈ 0.75, 관련 있지만 다른 사실 ≈ 0.54~0.61, 관련 검색어→기억 ≈ 0.53~0.60, 무관한 검색어의 최고점 ≈ 0.47 → 중복 0.7, 검색 하한 0.5. 같은 주제의 긴 결정 기록끼리는 0.70까지 올라가는 오탐이 확인됨(P0 결정 ↔ P2 결정) → `allow_similar`로 저장, 이 값은 문자열 `"true"`도 허용(오래된 도구 목록을 가진 클라이언트 대응). Worker 로그에 상위 점수(내용 제외)를 남겨 계속 조정 가능
+- **벡터 동기화**: 내용·태그·카테고리가 바뀔 때만 재임베딩(중요도만 바뀌면 생략), `forget` 시 벡터 삭제. 임베딩 텍스트에 태그를 포함
+- **테스트 설정 분리**: AI·Vectorize 바인딩은 로컬에서 실행할 수 없어 `tests/wrangler.test.jsonc`에서 제외 (HTTP 수준 테스트는 키워드 대체 경로를 검증)
 
 ---
 

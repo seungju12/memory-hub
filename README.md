@@ -1,17 +1,17 @@
 # Memory Hub
 
-여러 AI 어시스턴트(Claude, Claude Code, Antigravity, Gemini, Pickle)가 **나에 대한 정보를 하나의 저장소에서 공유**하도록 만든 개인용 원격 MCP 서버입니다. Cloudflare 무료 티어(Workers + D1)에서 동작합니다.
+여러 AI 어시스턴트(Claude, Claude Code, Antigravity, Gemini, Pickle)가 **나에 대한 정보를 하나의 저장소에서 공유**하도록 만든 개인용 원격 MCP 서버입니다. Cloudflare 무료 티어(Workers + D1 + Vectorize + Workers AI)에서 동작합니다.
 
 - 설계 문서: [docs/architecture.md](docs/architecture.md)
-- 현재 단계: **P1** — OAuth 2.1 + GitHub 로그인(본인 계정만), Bearer 토큰(CLI 대안), 키워드 검색(한국어 trigram), 8개 MCP 도구
+- 현재 단계: **P2** — 하이브리드 검색(Workers AI `bge-m3` 의미 검색 + 한국어 trigram 키워드, RRF 병합), 의미 기반 중복 감지, OAuth 2.1 + GitHub 로그인, 8개 MCP 도구
 
 ## MCP 도구
 
 | 도구 | 설명 |
 |---|---|
 | `get_context` | 대화 시작 시 프로필·중요 기억·최근 기억 로드 |
-| `recall` | 키워드 검색 (한국어 부분 일치, 조사 제거) |
-| `remember` | 기억 저장 (중복 감지, 민감 정보 거부) |
+| `recall` | 하이브리드 검색 — 의미 유사도 + 키워드(한국어 부분 일치, 조사 제거)를 RRF로 병합 |
+| `remember` | 기억 저장 — 완전 중복·의미 유사(≥0.7) 후보 반환, 민감 정보 거부 |
 | `update_memory` / `forget` | 수정 / 소프트 삭제 (모든 변경은 audit log 기록) |
 | `list_memories` | 최근·카테고리별 목록 |
 | `get_profile` / `set_profile` | 핵심 프로필 key-value |
@@ -24,6 +24,8 @@ cp wrangler.example.jsonc wrangler.jsonc
 npx wrangler login
 npx wrangler d1 create memory-hub          # 출력된 database_id를 wrangler.jsonc에 입력
 npx wrangler kv namespace create OAUTH_KV  # 출력된 id를 wrangler.jsonc의 kv_namespaces에 입력
+npx wrangler vectorize create memory-hub --dimensions=1024 --metric=cosine
+npx wrangler vectorize create-metadata-index memory-hub --property-name=category --type=string
 npm run db:migrate:remote
 # wrangler.jsonc의 vars.PUBLIC_BASE_URL을 배포 주소로 수정
 ```
@@ -41,7 +43,7 @@ npm run deploy
 ```
 
 로컬 개발: `cp .dev.vars.example .dev.vars && npm run db:migrate:local && npm run dev`
-테스트: `npm test`
+테스트: `npm test` (Workers AI·Vectorize는 원격 전용이라 테스트에서는 메모리 내 가짜 구현을 사용)
 
 클라이언트 연결 방법은 [clients/](clients/)를 참고하세요.
 

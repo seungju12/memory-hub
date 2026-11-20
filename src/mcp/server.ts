@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import type { SemanticIndex } from "../search/semantic";
 import {
 	CATEGORIES,
 	MAX_CONTENT,
@@ -15,12 +16,13 @@ import {
 	updateMemory,
 } from "../core/memory";
 
-export const SERVER_INFO = { name: "memory-hub", version: "0.2.0" };
+export const SERVER_INFO = { name: "memory-hub", version: "0.3.0" };
 
 const INSTRUCTIONS = `Memory Hub is the user's single, shared long-term memory across all of their AI assistants.
 - At the start of a conversation, call get_context (optionally with a topic) before answering.
 - When you learn a durable fact about the user (preferences, decisions, ongoing projects, profile facts), call remember. Skip small talk and one-off details.
 - If something contradicts a stored memory, call update_memory instead of creating a new one.
+- remember may answer status "similar" with near-duplicate candidates: merge with update_memory, or retry with allow_similar: true if it is really a different fact.
 - Never store secrets, passwords, API keys or government ID numbers.
 - Memories are usually written in Korean; search with Korean keywords.`;
 
@@ -49,8 +51,9 @@ async function run(fn: () => Promise<unknown>): Promise<ToolResult> {
 /**
  * @param defaultSource Recorded as `source` when a tool call does not name one
  *   (P1: derived from the authorized OAuth client, e.g. "claude").
+ * @param sem Semantic search (P2). Without it tools fall back to keyword search and exact dedupe.
  */
-export function buildServer(db: D1Database, defaultSource?: string): McpServer {
+export function buildServer(db: D1Database, defaultSource?: string, sem?: SemanticIndex | null): McpServer {
 	const withSource = <T extends { source?: string }>(args: T): T => ({ ...args, source: args.source?.trim() || defaultSource });
 	const server = new McpServer(SERVER_INFO, { instructions: INSTRUCTIONS });
 
@@ -65,7 +68,7 @@ export function buildServer(db: D1Database, defaultSource?: string): McpServer {
 			}),
 			annotations: { readOnlyHint: true },
 		},
-		async ({ topic }) => run(() => getContext(db, topic)),
+		async ({ topic }) => run(() => getContext(db, topic, sem)),
 	);
 
 	server.registerTool(
@@ -73,7 +76,7 @@ export function buildServer(db: D1Database, defaultSource?: string): McpServer {
 		{
 			title: "Search memories",
 			description:
-				"Keyword search over the user's memories (substring match, works for Korean). Use short keywords rather than full sentences.",
+				"Search the user's memories by meaning and keywords (hybrid: semantic similarity + Korean substring match). A short natural-language query or a few keywords both work.",
 			inputSchema: z.object({
 				query: z.string().min(1).max(200),
 				category: category.optional(),
@@ -81,7 +84,7 @@ export function buildServer(db: D1Database, defaultSource?: string): McpServer {
 			}),
 			annotations: { readOnlyHint: true },
 		},
-		async (args) => run(() => recall(db, args)),
+		async (args) => run(() => recall(db, args, sem)),
 	);
 
 	server.registerTool(
@@ -89,7 +92,7 @@ export function buildServer(db: D1Database, defaultSource?: string): McpServer {
 		{
 			title: "Save a memory",
 			description:
-				"Save one durable fact about the user. One fact per call, written as a self-contained sentence. Returns status 'duplicate' with the existing memory if the same fact is already stored.",
+				"Save one durable fact about the user. One fact per call, written as a self-contained sentence. Returns status 'duplicate' if the exact fact is stored, or 'similar' with near-duplicate candidates (not saved) so you can merge via update_memory or retry with allow_similar: true.",
 			inputSchema: z.object({
 				content: z.string().min(1).max(MAX_CONTENT),
 				category: category.describe(
@@ -98,9 +101,14 @@ export function buildServer(db: D1Database, defaultSource?: string): McpServer {
 				tags: z.array(z.string().max(40)).max(MAX_TAGS).optional(),
 				importance: z.number().int().min(1).max(5).optional().describe("1 (trivial) to 5 (core identity). Default 3."),
 				source: sourceField,
+				// Some clients send booleans as "true"/"false" (e.g. with a tool list cached before this field existed).
+				allow_similar: z
+					.preprocess((v) => (v === "true" ? true : v === "false" ? false : v), z.boolean())
+					.optional()
+					.describe("Set true only after a 'similar' response, when the new fact is genuinely different from the candidates."),
 			}),
 		},
-		async (args) => run(() => remember(db, withSource(args))),
+		async (args) => run(() => remember(db, withSource(args), sem)),
 	);
 
 	server.registerTool(
@@ -118,7 +126,7 @@ export function buildServer(db: D1Database, defaultSource?: string): McpServer {
 			}),
 			annotations: { idempotentHint: true },
 		},
-		async (args) => run(() => updateMemory(db, withSource(args))),
+		async (args) => run(() => updateMemory(db, withSource(args), sem)),
 	);
 
 	server.registerTool(
@@ -136,7 +144,7 @@ export function buildServer(db: D1Database, defaultSource?: string): McpServer {
 		async (args) =>
 			run(async () => {
 				const { id, reason, source } = withSource(args);
-				return { forgotten: await forget(db, id, reason, source) };
+				return { forgotten: await forget(db, id, reason, source, sem) };
 			}),
 	);
 

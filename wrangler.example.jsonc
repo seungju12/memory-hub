@@ -16,6 +16,11 @@
       "migrations_dir": "migrations"
     }
   ],
+  // P2: embeddings (bge-m3, 1024 dims) + vector index for semantic search
+  "ai": { "binding": "AI" },
+  "vectorize": [{ "binding": "VECTORS", "index_name": "memory-hub" }],
+  // P2: embed memories that have no vector yet (pre-P2 rows, failed indexing)
+  "triggers": { "crons": ["*/30 * * * *"] },
   "kv_namespaces": [
     // OAuth clients, grants and tokens (hashed / encrypted by workers-oauth-provider)
     { "binding": "OAUTH_KV", "id": "<your-kv-namespace-id>" }

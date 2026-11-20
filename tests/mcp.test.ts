@@ -101,6 +101,17 @@ describe("MCP protocol", () => {
 		expect(res.data).toMatch(/GitHub token/);
 	});
 
+	it("accepts allow_similar as a boolean or a \"true\" string", async () => {
+		for (const allow_similar of [true, "true"]) {
+			const res = await callTool("remember", { content: `문자열 불리언 테스트 (${typeof allow_similar})`, category: "knowledge", allow_similar });
+			expect(res.isError).toBe(false);
+			expect(JSON.parse(res.data).status).toBe("created");
+		}
+		const msg = await body(await rpc("tools/list", {}));
+		const schema = msg.result.tools.find((t: { name: string }) => t.name === "remember").inputSchema;
+		expect(schema.properties.allow_similar.type).toBe("boolean");
+	});
+
 	it("validates input schemas", async () => {
 		const msg = await body(await rpc("tools/call", { name: "remember", arguments: { content: "x", category: "nope" } }));
 		const failed = msg.error !== undefined || msg.result?.isError === true;

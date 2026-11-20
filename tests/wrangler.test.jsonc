@@ -1,0 +1,12 @@
+// Test-only config: same as wrangler.example.jsonc minus the remote-only bindings
+// (Workers AI, Vectorize), which cannot run under vitest. Semantic search is tested
+// with an in-memory fake (tests/fake-semantic.ts); without these bindings the Worker
+// falls back to keyword search, which is what the HTTP-level tests exercise.
+{
+  "name": "memory-hub-test",
+  "main": "../src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "d1_databases": [{ "binding": "DB", "database_name": "memory-hub", "database_id": "test", "migrations_dir": "../migrations" }],
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "test" }]
+}

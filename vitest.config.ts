@@ -5,7 +5,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
 	plugins: [
 		cloudflareTest(async () => ({
-			wrangler: { configPath: "./wrangler.example.jsonc" },
+			wrangler: { configPath: "./tests/wrangler.test.jsonc" },
 			miniflare: {
 				bindings: {
 					MCP_TOKEN: "test-token-0123456789",
