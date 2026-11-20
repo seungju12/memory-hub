@@ -44,7 +44,10 @@ describe("HTTP surface", () => {
 	});
 
 	it("rejects missing or wrong tokens", async () => {
-		expect((await rpc("tools/list", {}, null)).status).toBe(401);
+		const missing = await rpc("tools/list", {}, null);
+		expect(missing.status).toBe(401);
+		// MCP discovery: the challenge points clients at the protected resource metadata.
+		expect(missing.headers.get("WWW-Authenticate")).toContain("resource_metadata=");
 		expect((await rpc("tools/list", {}, "wrong-token-0123456789")).status).toBe(401);
 	});
 

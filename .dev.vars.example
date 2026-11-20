@@ -1,2 +1,8 @@
 # Copy to .dev.vars for local development
 MCP_TOKEN=dev-token-change-me
+# GitHub OAuth App for local dev (callback: http://localhost:8787/callback)
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+ALLOWED_GITHUB_USER_ID=
+# Leave the wrangler.jsonc value for production; locally the request origin is used when this is empty
+PUBLIC_BASE_URL=

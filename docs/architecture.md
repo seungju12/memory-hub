@@ -377,8 +377,8 @@ memory-hub/                     # GitHub public
 
 | 단계 | 내용 | 완료 기준 |
 |---|---|---|
-| **P0** 뼈대 ✅ (코드 완료, 배포 전) | Stateless MCP 핸들러, 8개 도구, trigram FTS 검색, Bearer 토큰, CI + gitleaks | 로컬에서 저장·조회 검증, 테스트 20개 통과 |
-| **P1** 인증 | OAuth 2.1 + GitHub 로그인 | claude.ai 커스텀 커넥터 연결 성공 |
+| **P0** 뼈대 ✅ (배포 완료, Bearer로 Claude Code 연결 중) | Stateless MCP 핸들러, 8개 도구, trigram FTS 검색, Bearer 토큰, CI + gitleaks | 로컬에서 저장·조회 검증, 테스트 20개 통과 |
+| **P1** 인증 ✅ (코드 완료, 배포·커넥터 연결 확인 대기) | OAuth 2.1 + GitHub 로그인 | claude.ai 커스텀 커넥터 연결 성공 |
 | **P2** 검색 고도화 | Vectorize + 임베딩 + 하이브리드 검색, 중복 감지 | 한국어 의미 검색 동작 |
 | **P2.5** 초기 데이터 | Gemini Takeout → Claude Code 추출 → 검토 → import | 검토된 기억 일괄 저장 완료 |
 | **P3** MCP 클라이언트 | **개인 도메인 전환**, Antigravity 연결, 공통 규칙 배포 | MCP 클라이언트 3곳에서 같은 기억 조회 |
@@ -393,6 +393,16 @@ memory-hub/                     # GitHub public
 - **검색**: FTS5 `trigram` 토크나이저 + 검색어별 부분 일치 점수. 형태소 분석기 없이 한국어 검색 가능, 조사(을/를/에서 등)는 검색어에서 제거
 - **중복 감지**: P0은 정규화 후 완전 일치만. 의미 유사도 중복은 P2(Vectorize)에서
 - **`source`**: 현재는 도구 인자로 받음. P1에서 OAuth 클라이언트 정보로 자동 기록 예정
+
+### P1 구현 메모 (설계 대비 변경점)
+- **`@cloudflare/workers-oauth-provider` 1.x의 `OAuthProvider`(단일 Worker)** 사용. `/mcp`만 보호 API, 나머지(`/authorize`, `/callback`, `/health`)는 기본 핸들러
+- **Confused deputy 방지**: DCR로 아무 클라이언트나 등록할 수 있으므로, GitHub로 보내기 전에 **클라이언트별 승인 페이지**를 항상 거침. 라이브러리의 `beginConsent/approveConsent`(브라우저 바인딩 `__Host-` 쿠키, 1회용 핸들, `frame-ancestors 'none'`)와 `beginUpstream/finishUpstream`(승인 후에만 생기는 `state`, 브라우저 바인딩) 사용. 승인 기억(remember consent)은 쓰지 않음 — 새 클라이언트 연결 시에만 뜨고, 이후엔 refresh 토큰으로 유지되므로 불편이 작음
+- **GitHub**: PKCE(S256) 사용, scope 없음(공개 프로필의 숫자 `id`만 필요). GitHub 토큰은 ID 확인 후 버림 → 서버는 GitHub API 권한을 보유하지 않음. 허용 판정은 바뀔 수 있는 `login`이 아닌 **숫자 ID**로
+- **Bearer 토큰 병행**: `resolveExternalToken`으로 `MCP_TOKEN`을 계속 허용 (CLI 대안). secret을 지우면 OAuth 전용
+- **`source` 자동 기록**: 승인 시 OAuth 클라이언트 이름(예: "Claude" → `claude`)을 grant props에 저장 → 도구 인자에 `source`가 없으면 이 값 사용
+- **CIMD 지원**: 최신 MCP 인증 스펙의 Client ID Metadata Document도 허용 (`global_fetch_strictly_public` 호환성 플래그 필요)
+- **토큰 수명**: access 1시간, refresh 30일(사용 시 연장)
+- **`PUBLIC_BASE_URL`**: OAuth 메타데이터의 resource/issuer와 GitHub callback에 사용 → P3 도메인 전환 시 vars + GitHub OAuth App callback만 변경
 
 ---
 

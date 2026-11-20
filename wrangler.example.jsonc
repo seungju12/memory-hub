@@ -4,7 +4,7 @@
   "name": "memory-hub",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "observability": { "enabled": true },
   "workers_dev": true,
   "preview_urls": false,
@@ -15,7 +15,17 @@
       "database_id": "<your-d1-database-id>",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  "kv_namespaces": [
+    // OAuth clients, grants and tokens (hashed / encrypted by workers-oauth-provider)
+    { "binding": "OAUTH_KV", "id": "<your-kv-namespace-id>" }
+  ],
+  "vars": {
+    // Public origin used for OAuth metadata and the GitHub callback. Change to the custom domain in P3.
+    "PUBLIC_BASE_URL": "https://memory-hub.<your-subdomain>.workers.dev"
+  }
   // Secrets (set with `wrangler secret put`, never commit):
-  //   MCP_TOKEN  - Bearer token for CLI clients (P0)
+  //   GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET - GitHub OAuth App (callback: <PUBLIC_BASE_URL>/callback)
+  //   ALLOWED_GITHUB_USER_ID - numeric id of the only GitHub user allowed (gh api user --jq .id)
+  //   MCP_TOKEN              - optional Bearer token for CLI clients (min 16 chars)
 }

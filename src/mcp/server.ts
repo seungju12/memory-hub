@@ -15,7 +15,7 @@ import {
 	updateMemory,
 } from "../core/memory";
 
-export const SERVER_INFO = { name: "memory-hub", version: "0.1.0" };
+export const SERVER_INFO = { name: "memory-hub", version: "0.2.0" };
 
 const INSTRUCTIONS = `Memory Hub is the user's single, shared long-term memory across all of their AI assistants.
 - At the start of a conversation, call get_context (optionally with a topic) before answering.
@@ -46,7 +46,12 @@ async function run(fn: () => Promise<unknown>): Promise<ToolResult> {
 	}
 }
 
-export function buildServer(db: D1Database): McpServer {
+/**
+ * @param defaultSource Recorded as `source` when a tool call does not name one
+ *   (P1: derived from the authorized OAuth client, e.g. "claude").
+ */
+export function buildServer(db: D1Database, defaultSource?: string): McpServer {
+	const withSource = <T extends { source?: string }>(args: T): T => ({ ...args, source: args.source?.trim() || defaultSource });
 	const server = new McpServer(SERVER_INFO, { instructions: INSTRUCTIONS });
 
 	server.registerTool(
@@ -95,7 +100,7 @@ export function buildServer(db: D1Database): McpServer {
 				source: sourceField,
 			}),
 		},
-		async (args) => run(() => remember(db, args)),
+		async (args) => run(() => remember(db, withSource(args))),
 	);
 
 	server.registerTool(
@@ -113,7 +118,7 @@ export function buildServer(db: D1Database): McpServer {
 			}),
 			annotations: { idempotentHint: true },
 		},
-		async (args) => run(() => updateMemory(db, args)),
+		async (args) => run(() => updateMemory(db, withSource(args))),
 	);
 
 	server.registerTool(
@@ -128,7 +133,11 @@ export function buildServer(db: D1Database): McpServer {
 			}),
 			annotations: { destructiveHint: true },
 		},
-		async ({ id, reason, source }) => run(async () => ({ forgotten: await forget(db, id, reason, source) })),
+		async (args) =>
+			run(async () => {
+				const { id, reason, source } = withSource(args);
+				return { forgotten: await forget(db, id, reason, source) };
+			}),
 	);
 
 	server.registerTool(
@@ -169,8 +178,9 @@ export function buildServer(db: D1Database): McpServer {
 			}),
 			annotations: { idempotentHint: true },
 		},
-		async ({ key, value, source }) =>
+		async (args) =>
 			run(async () => {
+				const { key, value, source } = withSource(args);
 				await setProfile(db, key, value, source);
 				return { ok: true, key, value };
 			}),
