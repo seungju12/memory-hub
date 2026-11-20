@@ -1,0 +1,16 @@
+node_modules/
+.wrangler/
+dist/
+
+# secrets & real config (public repo!)
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+wrangler.jsonc
+
+# personal data — never commit
+data/
+backups/
+*.takeout.json
+!.dev.vars.example

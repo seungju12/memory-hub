@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake tokens used only in tests and local examples"
+regexes = ['''test-token-0123456789''', '''dev-token-change-me''']

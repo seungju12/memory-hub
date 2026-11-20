@@ -1,0 +1,21 @@
+// Copy to wrangler.jsonc and fill in your own IDs (wrangler.jsonc is gitignored).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "memory-hub",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "workers_dev": true,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "memory-hub",
+      "database_id": "<your-d1-database-id>",
+      "migrations_dir": "migrations"
+    }
+  ]
+  // Secrets (set with `wrangler secret put`, never commit):
+  //   MCP_TOKEN  - Bearer token for CLI clients (P0)
+}
