@@ -378,7 +378,7 @@ memory-hub/                     # GitHub public
 | 단계 | 내용 | 완료 기준 |
 |---|---|---|
 | **P0** 뼈대 ✅ (배포 완료, Bearer로 Claude Code 연결 중) | Stateless MCP 핸들러, 8개 도구, trigram FTS 검색, Bearer 토큰, CI + gitleaks | 로컬에서 저장·조회 검증, 테스트 20개 통과 |
-| **P1** 인증 ✅ (코드 완료, 배포·커넥터 연결 확인 대기) | OAuth 2.1 + GitHub 로그인 | claude.ai 커스텀 커넥터 연결 성공 |
+| **P1** 인증 ✅ (배포 완료, 2026-11-20 claude.ai 커넥터 연결 확인) | OAuth 2.1 + GitHub 로그인 | claude.ai 커스텀 커넥터 연결 성공 |
 | **P2** 검색 고도화 | Vectorize + 임베딩 + 하이브리드 검색, 중복 감지 | 한국어 의미 검색 동작 |
 | **P2.5** 초기 데이터 | Gemini Takeout → Claude Code 추출 → 검토 → import | 검토된 기억 일괄 저장 완료 |
 | **P3** MCP 클라이언트 | **개인 도메인 전환**, Antigravity 연결, 공통 규칙 배포 | MCP 클라이언트 3곳에서 같은 기억 조회 |
