@@ -380,7 +380,7 @@ memory-hub/                     # GitHub public
 | **P0** 뼈대 ✅ (배포 완료, Bearer로 Claude Code 연결 중) | Stateless MCP 핸들러, 8개 도구, trigram FTS 검색, Bearer 토큰, CI + gitleaks | 로컬에서 저장·조회 검증, 테스트 20개 통과 |
 | **P1** 인증 ✅ (배포 완료, 2026-11-20 claude.ai 커넥터 연결 확인) | OAuth 2.1 + GitHub 로그인 | claude.ai 커스텀 커넥터 연결 성공 |
 | **P2** 검색 고도화 ✅ (2026-11-20 배포) | Vectorize + 임베딩 + 하이브리드 검색, 중복 감지 | 한국어 의미 검색 동작 |
-| **P2.5** 초기 데이터 | Gemini Takeout → Claude Code 추출 → 검토 → import | 검토된 기억 일괄 저장 완료 |
+| **P2.5** 초기 데이터 ✅ (2026-11-20, 프로필 8 + 기억 33) | Gemini Takeout → Claude Code 추출 → 검토 → import | 검토된 기억 일괄 저장 완료 |
 | **P3** MCP 클라이언트 | **개인 도메인 전환**, Antigravity 연결, 공통 규칙 배포 | MCP 클라이언트 3곳에서 같은 기억 조회 |
 | **P3.5** Bridge | 공용 renderer → Google Docs(Gemini)·Notion(Pickle) sink, Notion Inbox 수집, Gemini 쓰기 경로 검증 (3.4절) | Gemini·Pickle이 About Me를 읽고, Inbox 기록이 D1에 반영됨 |
 | **P4** 운영 | CI/CD, 백업, audit log, 레이트 리밋 | main 푸시 시 자동 배포 |
@@ -412,6 +412,13 @@ memory-hub/                     # GitHub public
 - **기준값 실측** (bge-m3, 한국어): 같은 사실의 다른 표현 ≈ 0.75, 관련 있지만 다른 사실 ≈ 0.54~0.61, 관련 검색어→기억 ≈ 0.53~0.60, 무관한 검색어의 최고점 ≈ 0.47 → 중복 0.7, 검색 하한 0.5. 같은 주제의 긴 결정 기록끼리는 0.70까지 올라가는 오탐이 확인됨(P0 결정 ↔ P2 결정) → `allow_similar`로 저장, 이 값은 문자열 `"true"`도 허용(오래된 도구 목록을 가진 클라이언트 대응). Worker 로그에 상위 점수(내용 제외)를 남겨 계속 조정 가능
 - **벡터 동기화**: 내용·태그·카테고리가 바뀔 때만 재임베딩(중요도만 바뀌면 생략), `forget` 시 벡터 삭제. 임베딩 텍스트에 태그를 포함
 - **테스트 설정 분리**: AI·Vectorize 바인딩은 로컬에서 실행할 수 없어 `tests/wrangler.test.jsonc`에서 제외 (HTTP 수준 테스트는 키워드 대체 경로를 검증)
+
+### P2.5 구현 메모
+- Takeout `내 활동 → Gemini 앱` JSON은 활동 4,448건(2025-07 ~ 2026-11). `title`이 사용자 질문, `details` URL이 대화 ID → 대화 861개·질문 3,869개로 재구성 (`scripts/import-gemini/parse.py`)
+- 나에 대한 사실은 대부분 **사용자 질문**에 있으므로 1인칭·생활·업무 키워드로 335개만 추리고 로그·코드 붙여넣기는 제외 (`filter.py`) → Claude Code가 읽고 Gemini "저장된 정보" + Gemini의 자기 요약 답변과 합쳐 후보 작성
+- 검토 파일(`data/review.md`, gitignore)에서 민감·제3자 정보는 기본 체크 해제, 성적인 내용·건강 증상·가족 소득·주문번호 등은 후보에서 아예 제외. 최종 반영 여부는 사용자가 결정
+- import는 `remember`/`set_profile`과 같은 서비스 계층, `source=import:gemini-takeout` (`import_review.py`, 기본 dry run)
+- **Vectorize 쓰기 지연 확인**: upsert 후 색인 반영까지 1~3분 걸림(33개 일괄 저장 시 약 3분). 그 사이엔 의미 검색·의미 중복 감지가 새 기억을 못 봄 → 키워드 검색과 완전 일치 중복 검사가 보완. 대량 import 직후의 중복 검사는 키워드 기준으로만 동작한다는 점에 유의
 
 ---
 
