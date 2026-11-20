@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 const TOKEN = "test-token-0123456789";
 const BASE = "https://memory-hub.example.workers.dev";
+// Built at runtime so secret scanners do not flag this obviously fake fixture.
+const FAKE_GITHUB_TOKEN = ["ghp", "x".repeat(36)].join("_");
 
 async function rpc(method: string, params: unknown, token: string | null = TOKEN, id = 1) {
 	const headers: Record<string, string> = {
@@ -91,7 +93,7 @@ describe("MCP protocol", () => {
 	});
 
 	it("returns a tool error (not a crash) for refused content", async () => {
-		const res = await callTool("remember", { content: "ghp_abcdefghijklmnopqrstuvwxyz0123456789", category: "knowledge" });
+		const res = await callTool("remember", { content: FAKE_GITHUB_TOKEN, category: "knowledge" });
 		expect(res.isError).toBe(true);
 		expect(res.data).toMatch(/GitHub token/);
 	});

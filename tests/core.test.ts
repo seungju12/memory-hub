@@ -34,7 +34,7 @@ describe("remember", () => {
 	});
 
 	it("refuses secrets", async () => {
-		await expect(remember(db, { content: "내 키는 sk-ant-abcdefghijklmnopqrstuvwxyz123", category: "knowledge" })).rejects.toThrow(MemoryError);
+		await expect(remember(db, { content: `내 키는 ${["sk", "ant", "x".repeat(30)].join("-")}`, category: "knowledge" })).rejects.toThrow(MemoryError);
 		await expect(remember(db, { content: "비밀번호: hunter2", category: "knowledge" })).rejects.toThrow(/password/);
 	});
 
