@@ -381,7 +381,7 @@ memory-hub/                     # GitHub public
 | **P1** 인증 ✅ (배포 완료, 2026-11-20 claude.ai 커넥터 연결 확인) | OAuth 2.1 + GitHub 로그인 | claude.ai 커스텀 커넥터 연결 성공 |
 | **P2** 검색 고도화 ✅ (2026-11-20 배포) | Vectorize + 임베딩 + 하이브리드 검색, 중복 감지 | 한국어 의미 검색 동작 |
 | **P2.5** 초기 데이터 ✅ (2026-11-20, 프로필 8 + 기억 33) | Gemini Takeout → Claude Code 추출 → 검토 → import | 검토된 기억 일괄 저장 완료 |
-| **P3** MCP 클라이언트 | **개인 도메인 전환**, Antigravity 연결, 공통 규칙 배포 | MCP 클라이언트 3곳에서 같은 기억 조회 |
+| **P3** MCP 클라이언트 ✅ (2026-11-21) | **개인 도메인 전환**, Antigravity 연결, 공통 규칙 배포 | MCP 클라이언트 3곳에서 같은 기억 조회 |
 | **P3.5** Bridge | 공용 renderer → Google Docs(Gemini)·Notion(Pickle) sink, Notion Inbox 수집, Gemini 쓰기 경로 검증 (3.4절) | Gemini·Pickle이 About Me를 읽고, Inbox 기록이 D1에 반영됨 |
 | **P4** 운영 | CI/CD, 백업, audit log, 레이트 리밋 | main 푸시 시 자동 배포 |
 | **P5** 포트폴리오 | ADR 정리, 다이어그램, 데모 영상 → Antigravity에 인계 | 포트폴리오 문서 완성 |
@@ -420,6 +420,17 @@ memory-hub/                     # GitHub public
 - import는 `remember`/`set_profile`과 같은 서비스 계층, `source=import:gemini-takeout` (`import_review.py`, 기본 dry run)
 - **Vectorize 쓰기 지연 확인**: upsert 후 색인 반영까지 1~3분 걸림(33개 일괄 저장 시 약 3분). 그 사이엔 의미 검색·의미 중복 감지가 새 기억을 못 봄 → 키워드 검색과 완전 일치 중복 검사가 보완. 대량 import 직후의 중복 검사는 키워드 기준으로만 동작한다는 점에 유의
 
+### P3 구현 메모 (설계 대비 변경점)
+- **도메인**: Cloudflare Registrar에서 `.dev` 구매(자동 갱신 ON). 연 3달러 미만의 숫자 `.xyz`(1.111B Class)도 검토했으나 포트폴리오·브랜드 용도로 개인 이름 계열 `.dev` 채택. Worker는 `routes[].custom_domain`으로 `mcp.<도메인>`에 연결(DNS 레코드·인증서 자동), 전환은 `PUBLIC_BASE_URL` + GitHub OAuth App callback 변경만으로 끝남
+- **전환 순서**: Custom Domain 추가(이때 `workers.dev` 유지) → 클라이언트 URL 교체·GitHub callback 변경 → WAF 적용·검증 → `workers_dev: false`. 기존 OAuth 토큰은 audience가 옛 URL이라 claude.ai 커넥터는 제거 후 재등록
+- **엣지 보안 (무료 플랜)**
+  - Custom rule(Block): `/mcp`·`/authorize`·`/callback`·`/token`·`/register`·`/health`·`/.well-known/oauth-*` 외 경로 차단
+  - Rate limiting rule: 인증 4개 경로, IP당 10초 20회 초과 시 10초 차단(실측: 병렬 80회 중 64회 429). `/mcp`는 제외 — claude.ai 요청은 Anthropic 공용 egress IP에서 오므로 IP 기준 제한이 정상 사용을 막을 수 있음(앱 레벨 제한은 P4)
+  - 레이트 리밋 식을 Custom rule로 잘못 넣으면 인증 경로가 **항상 403**(이벤트 `source: firewallCustom`) → OAuth 전체가 막힘. 레이트 리밋이면 `429`/`source: ratelimit`
+  - `workers_dev: false`로 WAF 우회 경로 제거 (`*.workers.dev` → 404)
+- **Antigravity**: 앱 본체(`language_server.exe`)가 Windows에서 돌아 **WSL 원격으로 써도 설정은 Windows 홈 기준**. 전역 MCP 설정은 `~/.gemini/config/mcp_config.json`(원격 키는 `url`, 예전 `serverUrl`도 허용, `headers` 지원), 전역 규칙은 `~/.gemini/GEMINI.md`. Antigravity 에이전트가 안내한 `~/.gemini/antigravity/mcp_config.json`은 구버전 경로로 읽히지 않음. 설정은 앱 재시작 시 로드
+- **`source` 기록**: Bearer 연결(Claude Code, Antigravity)은 OAuth 클라이언트 이름이 없어 자동 기록이 안 됨 → 공통 규칙에 클라이언트별 `source` 지정 줄 추가 (`clients/rules.md`)
+
 ---
 
 ## 12. 결정된 사항 / 열린 질문
@@ -429,7 +440,7 @@ memory-hub/                     # GitHub public
 - 비 MCP 클라이언트는 저장소 분리: **Gemini → Google Docs(Gem)**, **Pickle → Notion** (원본은 D1 하나, 공용 renderer)
 - Gem 첨부 문서 갱신은 즉시 반영됨 (사용자 확인)
 - 초기 데이터는 **Gemini Takeout** → **Claude Code**로 로컬 추출 → 검토 → import
-- 도메인: P2까지 `workers.dev`, **P3 직전 개인 도메인 구매**
+- 도메인: P2까지 `workers.dev`, **P3에서 개인 도메인(`.dev`, Cloudflare Registrar)으로 전환 완료**, `workers.dev` 비활성화
 - 리포지토리: **코드만 GitHub public**, 데이터·백업은 비공개
 
 ### 열린 질문 (P3.5에서 실제로 확인)

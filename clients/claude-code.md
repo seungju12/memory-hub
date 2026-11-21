@@ -18,4 +18,4 @@ claude mcp add --transport http --scope user memory-hub https://<PUBLIC_BASE_URL
 
 `MCP_TOKEN` secret을 지우면 이 경로는 닫힌다(OAuth만 허용).
 
-`~/.claude/CLAUDE.md`에 공통 규칙(`clients/rules.md`)을 붙여 넣는다.
+`~/.claude/CLAUDE.md`에 공통 규칙([`rules.md`](rules.md), `<client>` = `claude-code`)을 붙여 넣는다.

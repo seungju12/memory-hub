@@ -3,7 +3,7 @@
 여러 AI 어시스턴트(Claude, Claude Code, Antigravity, Gemini, Pickle)가 **나에 대한 정보를 하나의 저장소에서 공유**하도록 만든 개인용 원격 MCP 서버입니다. Cloudflare 무료 티어(Workers + D1 + Vectorize + Workers AI)에서 동작합니다.
 
 - 설계 문서: [docs/architecture.md](docs/architecture.md)
-- 현재 단계: **P2** — 하이브리드 검색(Workers AI `bge-m3` 의미 검색 + 한국어 trigram 키워드, RRF 병합), 의미 기반 중복 감지, OAuth 2.1 + GitHub 로그인, 8개 MCP 도구
+- 현재 단계: **P3** — 개인 도메인 + 엣지 WAF·레이트 리밋, Claude·Claude Code·Antigravity 연결 / 하이브리드 검색(Workers AI `bge-m3` 의미 검색 + 한국어 trigram 키워드, RRF 병합), 의미 기반 중복 감지, OAuth 2.1 + GitHub 로그인, 8개 MCP 도구
 
 ## MCP 도구
 
@@ -27,7 +27,7 @@ npx wrangler kv namespace create OAUTH_KV  # 출력된 id를 wrangler.jsonc의 k
 npx wrangler vectorize create memory-hub --dimensions=1024 --metric=cosine
 npx wrangler vectorize create-metadata-index memory-hub --property-name=category --type=string
 npm run db:migrate:remote
-# wrangler.jsonc의 vars.PUBLIC_BASE_URL을 배포 주소로 수정
+# wrangler.jsonc의 routes와 vars.PUBLIC_BASE_URL을 내 도메인으로 수정 (도메인이 없으면 workers_dev: true + workers.dev 주소)
 ```
 
 **GitHub OAuth App** 만들기: GitHub → Settings → Developer settings → OAuth Apps → New

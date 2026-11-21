@@ -6,7 +6,9 @@
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "observability": { "enabled": true },
-  "workers_dev": true,
+  // P3: serve only on the custom domain (set to true while you have no domain yet)
+  "workers_dev": false,
+  "routes": [{ "pattern": "mcp.<your-domain>", "custom_domain": true }],
   "preview_urls": false,
   "d1_databases": [
     {
@@ -26,8 +28,8 @@
     { "binding": "OAUTH_KV", "id": "<your-kv-namespace-id>" }
   ],
   "vars": {
-    // Public origin used for OAuth metadata and the GitHub callback. Change to the custom domain in P3.
-    "PUBLIC_BASE_URL": "https://memory-hub.<your-subdomain>.workers.dev"
+    // Public origin used for OAuth metadata and the GitHub callback (no trailing slash)
+    "PUBLIC_BASE_URL": "https://mcp.<your-domain>"
   }
   // Secrets (set with `wrangler secret put`, never commit):
   //   GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET - GitHub OAuth App (callback: <PUBLIC_BASE_URL>/callback)
