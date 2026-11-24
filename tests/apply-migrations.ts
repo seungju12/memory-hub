@@ -9,5 +9,6 @@ beforeEach(async () => {
 		env.DB.prepare("DELETE FROM memories"),
 		env.DB.prepare("DELETE FROM profile"),
 		env.DB.prepare("DELETE FROM audit_log"),
+		env.DB.prepare("DELETE FROM bridge_state"),
 	]);
 });

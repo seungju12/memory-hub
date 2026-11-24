@@ -382,7 +382,7 @@ memory-hub/                     # GitHub public
 | **P2** 검색 고도화 ✅ (2026-11-20 배포) | Vectorize + 임베딩 + 하이브리드 검색, 중복 감지 | 한국어 의미 검색 동작 |
 | **P2.5** 초기 데이터 ✅ (2026-11-20, 프로필 8 + 기억 33) | Gemini Takeout → Claude Code 추출 → 검토 → import | 검토된 기억 일괄 저장 완료 |
 | **P3** MCP 클라이언트 ✅ (2026-11-21) | **개인 도메인 전환**, Antigravity 연결, 공통 규칙 배포 | MCP 클라이언트 3곳에서 같은 기억 조회 |
-| **P3.5** Bridge | 공용 renderer → Google Docs(Gemini)·Notion(Pickle) sink, Notion Inbox 수집, Gemini 쓰기 경로 검증 (3.4절) | Gemini·Pickle이 About Me를 읽고, Inbox 기록이 D1에 반영됨 |
+| **P3.5** Bridge 🚧 (Notion 코드 완료, Google Docs 남음) | 공용 renderer → Google Docs(Gemini)·Notion(Pickle) sink, Notion Inbox 수집, Gemini 쓰기 경로 검증 (3.4절) | Gemini·Pickle이 About Me를 읽고, Inbox 기록이 D1에 반영됨 |
 | **P4** 운영 | CI/CD, 백업, audit log, 레이트 리밋 | main 푸시 시 자동 배포 |
 | **P5** 포트폴리오 | ADR 정리, 다이어그램, 데모 영상 → Antigravity에 인계 | 포트폴리오 문서 완성 |
 
@@ -430,6 +430,14 @@ memory-hub/                     # GitHub public
   - `workers_dev: false`로 WAF 우회 경로 제거 (`*.workers.dev` → 404)
 - **Antigravity**: 앱 본체(`language_server.exe`)가 Windows에서 돌아 **WSL 원격으로 써도 설정은 Windows 홈 기준**. 전역 MCP 설정은 `~/.gemini/config/mcp_config.json`(원격 키는 `url`, 예전 `serverUrl`도 허용, `headers` 지원), 전역 규칙은 `~/.gemini/GEMINI.md`. Antigravity 에이전트가 안내한 `~/.gemini/antigravity/mcp_config.json`은 구버전 경로로 읽히지 않음. 설정은 앱 재시작 시 로드
 - **`source` 기록**: Bearer 연결(Claude Code, Antigravity)은 OAuth 클라이언트 이름이 없어 자동 기록이 안 됨 → 공통 규칙에 클라이언트별 `source` 지정 줄 추가 (`clients/rules.md`)
+
+### P3.5 구현 메모 (설계 대비 변경점)
+- **renderer** (`src/bridge/renderer.ts`): 프로필 + 내보내기 대상(중요도 ≥ 4 또는 `profile`·`preference`)을 중요도·최신순으로 약 4,500자 안에서 고르고, 섹션(선호 → 진행 중인 일 → 결정 → 배경 정보) 순으로 배치. 넘친 개수는 "N개 생략, 추측 금지" 문구로 표시. 내용만으로 만든 `hash`가 같으면 sink 쓰기를 건너뜀(`bridge_state` 테이블)
+- **디바운스 대신 5분 cron**: Workers에서 디바운스는 Durable Object/Queue가 필요해 단순화. 5분마다 렌더링해 hash가 바뀐 경우에만 쓰므로 반영 지연은 최대 5분으로 설계와 같고, 하루 1회 강제 재작성(안전망)도 같은 cron에서 처리. Inbox 수집은 10분 cron. cron 3개는 각각 별도 호출이라 서브요청 한도를 따로 씀 (무료 플랜 계정당 cron 5개)
+- **서브요청 50개 한도(무료, D1 호출 포함)**: Notion 페이지를 블록 수십 개 대신 섹션당 제목 + 여러 줄 문단 1개(약 10~13블록)로 구성 → 갱신 1회 = 목록 1 + 추가 1 + 삭제 ~13. 새 내용을 먼저 추가하고 옛 블록을 지워 빈 페이지가 보이는 순간이 없고, 중간 실패 시 다음 실행이 정리함. Inbox는 행당 약 8개(D1·임베딩·Vectorize·Notion)라 실행당 3행
+- **Notion API `2026-03-11`**: DB 행 조회는 `POST /v1/data_sources/{id}/query` → secret에 데이터베이스 ID가 아닌 **data source ID**를 넣음. 429는 `Retry-After` ≤ 5초면 1회 재시도, 아니면 다음 cron에 맡김
+- **Inbox 상태값**: 설계의 대기/처리됨/거부에 `중복`, `확인 필요`(의미 유사 후보가 있어 보류, 후보 ID 기록)를 추가. 민감정보 거부 시 Notion 원문은 사용자가 직접 삭제하도록 안내
+- 설정 방법: `clients/pickle.md`
 
 ---
 

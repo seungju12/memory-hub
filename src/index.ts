@@ -2,11 +2,18 @@ import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { createMcpHandler } from "agents/mcp/server";
 import { tokenMatches } from "./auth/bearer";
 import { type AuthProps, handleAuthRoute } from "./auth/github";
+import { runInboxCollection, runSnapshotSync } from "./bridge/sync";
 import { backfillEmbeddings } from "./core/memory";
 import { SERVER_INFO, buildServer } from "./mcp/server";
 import { cloudflareSemanticIndex } from "./search/semantic";
 
 const MCP_ROUTE = "/mcp";
+
+export const CRON = {
+	backfill: "*/30 * * * *", // P2: embedding backfill
+	snapshot: "*/5 * * * *", // P3.5: About Me snapshot → Notion / Google Docs (skipped while unchanged)
+	inbox: "*/10 * * * *", // P3.5: Memory Inbox → D1
+} as const;
 
 /** Requests under /mcp with a valid token (OAuth-issued or the static Bearer) land here. */
 const mcpApi = {
@@ -74,11 +81,23 @@ export default {
 		return provider.fetch(request, env, ctx);
 	},
 
-	/** Cron: give a vector to memories that have none yet (pre-P2 rows, failed indexing). */
-	async scheduled(_controller, env) {
-		const sem = cloudflareSemanticIndex(env);
-		if (!sem) return;
-		const n = await backfillEmbeddings(env.DB, sem);
-		if (n) console.log(`[backfill] embedded ${n} memories`);
+	/** Crons (must match `triggers.crons` in wrangler.jsonc). Each one is its own invocation with its own subrequest budget. */
+	async scheduled(controller, env) {
+		switch (controller.cron) {
+			case CRON.backfill: {
+				// Give a vector to memories that have none yet (pre-P2 rows, failed indexing).
+				const sem = cloudflareSemanticIndex(env);
+				if (!sem) return;
+				const n = await backfillEmbeddings(env.DB, sem);
+				if (n) console.log(`[backfill] embedded ${n} memories`);
+				return;
+			}
+			case CRON.snapshot:
+				return runSnapshotSync(env);
+			case CRON.inbox:
+				return runInboxCollection(env, cloudflareSemanticIndex(env));
+			default:
+				console.warn(`[cron] no job for "${controller.cron}"`);
+		}
 	},
 } satisfies ExportedHandler<Env>;

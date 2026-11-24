@@ -21,8 +21,9 @@
   // P2: embeddings (bge-m3, 1024 dims) + vector index for semantic search
   "ai": { "binding": "AI" },
   "vectorize": [{ "binding": "VECTORS", "index_name": "memory-hub" }],
-  // P2: embed memories that have no vector yet (pre-P2 rows, failed indexing)
-  "triggers": { "crons": ["*/30 * * * *"] },
+  // P2: embedding backfill (*/30) · P3.5: About Me snapshot sync (*/5), Memory Inbox collection (*/10)
+  // Keep in sync with CRON in src/index.ts. Free plan: 5 cron triggers per account.
+  "triggers": { "crons": ["*/30 * * * *", "*/5 * * * *", "*/10 * * * *"] },
   "kv_namespaces": [
     // OAuth clients, grants and tokens (hashed / encrypted by workers-oauth-provider)
     { "binding": "OAUTH_KV", "id": "<your-kv-namespace-id>" }
@@ -35,4 +36,5 @@
   //   GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET - GitHub OAuth App (callback: <PUBLIC_BASE_URL>/callback)
   //   ALLOWED_GITHUB_USER_ID - numeric id of the only GitHub user allowed (gh api user --jq .id)
   //   MCP_TOKEN              - optional Bearer token for CLI clients (min 16 chars)
+  //   NOTION_TOKEN, NOTION_ABOUT_PAGE_ID, NOTION_INBOX_DATA_SOURCE_ID - P3.5 Notion bridge (optional, see clients/pickle.md)
 }
